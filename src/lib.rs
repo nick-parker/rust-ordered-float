@@ -7,6 +7,15 @@
 extern crate num_traits;
 #[cfg(feature = "std")] extern crate std;
 
+
+extern crate alga;
+use alga::general::{RealField, AbstractMagma, Additive, Multiplicative, Identity,
+    TwoSidedInverse};
+
+extern crate alga_derive;
+use alga_derive::Alga;
+
+
 use core::cmp::Ordering;
 use core::ops::{Add, AddAssign, Deref, DerefMut, Div, DivAssign, Mul, MulAssign, Neg, Rem,
                RemAssign, Sub, SubAssign};
@@ -41,15 +50,67 @@ const MAN_MASK: u64 = 0x000fffffffffffffu64;
 const CANONICAL_NAN_BITS: u64 = 0x7ff8000000000000u64;
 const CANONICAL_ZERO_BITS: u64 = 0x0u64;
 
+#[allow(missing_docs)]
+pub trait RealFloat: RealField + Float {
+    // fn is_nan(self) -> bool;
+    // fn nan() -> Self;
+    // fn integer_decode(self) -> (u64, i16, i8);
+}
+
+impl RealFloat for f32 {
+    // fn is_nan(self) -> bool {
+    //     self != self
+    // }
+    // fn nan() -> f32 {
+    //     std::f32::NAN
+    // }
+    // fn integer_decode(self) -> (u64, i16, i8) {
+    //     let bits: u32 = unsafe { mem::transmute(self) };
+    //     let sign: i8 = if bits >> 31 == 0 { 1 } else { -1 };
+    //     let mut exponent: i16 = ((bits >> 23) & 0xff) as i16;
+    //     let mantissa = if exponent == 0 {
+    //         (bits & 0x7fffff) << 1
+    //     } else {
+    //         (bits & 0x7fffff) | 0x800000
+    //     };
+    //     // Exponent bias + mantissa shift
+    //     exponent -= 127 + 23;
+    //     (mantissa as u64, exponent, sign)
+    // }
+}
+
+impl RealFloat for f64 {
+    // fn is_nan(self) -> bool {
+    //     self != self
+    // }
+    // fn nan() -> f64 {
+    //     std::f64::NAN
+    // }
+    // fn integer_decode(self) -> (u64, i16, i8) {
+    //     let bits: u64 = unsafe { mem::transmute(self) };
+    //     let sign: i8 = if bits >> 63 == 0 { 1 } else { -1 };
+    //     let mut exponent: i16 = ((bits >> 52) & 0x7ff) as i16;
+    //     let mantissa = if exponent == 0 {
+    //         (bits & 0xfffffffffffff) << 1
+    //     } else {
+    //         (bits & 0xfffffffffffff) | 0x10000000000000
+    //     };
+    //     // Exponent bias + mantissa shift
+    //     exponent -= 1023 + 52;
+    //     (mantissa, exponent, sign)
+    // }
+}
+
+
 /// A wrapper around Floats providing an implementation of Ord and Hash.
 ///
 /// NaN is sorted as *greater* than all other values and *equal*
 /// to itself, in contradiction with the IEEE standard.
 #[derive(Debug, Default, Clone, Copy)]
 #[repr(transparent)]
-pub struct OrderedFloat<T: Float>(pub T);
+pub struct OrderedFloat<T: RealFloat>(pub T);
 
-impl<T: Float> OrderedFloat<T> {
+impl<T: RealFloat> OrderedFloat<T> {
     /// Get the value out.
     pub fn into_inner(self) -> T {
         let OrderedFloat(val) = self;
@@ -57,27 +118,27 @@ impl<T: Float> OrderedFloat<T> {
     }
 }
 
-impl<T: Float> AsRef<T> for OrderedFloat<T> {
+impl<T: RealFloat> AsRef<T> for OrderedFloat<T> {
     fn as_ref(&self) -> &T {
         let OrderedFloat(ref val) = *self;
         val
     }
 }
 
-impl<T: Float> AsMut<T> for OrderedFloat<T> {
+impl<T: RealFloat> AsMut<T> for OrderedFloat<T> {
     fn as_mut(&mut self) -> &mut T {
         let OrderedFloat(ref mut val) = *self;
         val
     }
 }
 
-impl<T: Float> PartialOrd for OrderedFloat<T> {
+impl<T: RealFloat> PartialOrd for OrderedFloat<T> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<T: Float> Ord for OrderedFloat<T> {
+impl<T: RealFloat> Ord for OrderedFloat<T> {
     fn cmp(&self, other: &Self) -> Ordering {
         let lhs = self.as_ref();
         let rhs = other.as_ref();
@@ -98,7 +159,7 @@ impl<T: Float> Ord for OrderedFloat<T> {
     }
 }
 
-impl<T: Float> PartialEq for OrderedFloat<T> {
+impl<T: RealFloat> PartialEq for OrderedFloat<T> {
     fn eq(&self, other: &OrderedFloat<T>) -> bool {
         if self.as_ref().is_nan() {
             other.as_ref().is_nan()
@@ -108,7 +169,7 @@ impl<T: Float> PartialEq for OrderedFloat<T> {
     }
 }
 
-impl<T: Float> Hash for OrderedFloat<T> {
+impl<T: RealFloat> Hash for OrderedFloat<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         if self.is_nan() {
             // normalize to one representation of NaN
@@ -119,9 +180,9 @@ impl<T: Float> Hash for OrderedFloat<T> {
     }
 }
 
-impl<T: Float + fmt::Display> fmt::Display for OrderedFloat<T> {
+impl<T: RealFloat + fmt::Display> fmt::Display for OrderedFloat<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.as_ref().fmt(f)
+        core::fmt::Display::fmt(&self.as_ref(), f)
     }
 }
 
@@ -137,13 +198,13 @@ impl Into<f64> for OrderedFloat<f64> {
     }
 }
 
-impl<T: Float> From<T> for OrderedFloat<T> {
+impl<T: RealFloat> From<T> for OrderedFloat<T> {
     fn from(val: T) -> Self {
         OrderedFloat(val)
     }
 }
 
-impl<T: Float> Deref for OrderedFloat<T> {
+impl<T: RealFloat> Deref for OrderedFloat<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -151,25 +212,25 @@ impl<T: Float> Deref for OrderedFloat<T> {
     }
 }
 
-impl<T: Float> DerefMut for OrderedFloat<T> {
+impl<T: RealFloat> DerefMut for OrderedFloat<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.as_mut()
     }
 }
 
-impl<T: Float> Eq for OrderedFloat<T> {}
+impl<T: RealFloat> Eq for OrderedFloat<T> {}
 
-impl<T: Float> Bounded for OrderedFloat<T> {
+impl<T: RealFloat> Bounded for OrderedFloat<T> {
     fn min_value() -> Self {
-        OrderedFloat(T::min_value())
+        OrderedFloat(num_traits::Float::min_value())
     }
 
     fn max_value() -> Self {
-        OrderedFloat(T::max_value())
+        OrderedFloat(num_traits::Float::max_value())
     }
 }
 
-impl<T: Float + FromStr> FromStr for OrderedFloat<T> {
+impl<T: RealFloat + FromStr> FromStr for OrderedFloat<T> {
     type Err = T::Err;
 
     /// Convert a &str to `OrderedFloat`. Returns an error if the string fails to parse.
@@ -186,7 +247,7 @@ impl<T: Float + FromStr> FromStr for OrderedFloat<T> {
     }
 }
 
-impl<T: Float> Neg for OrderedFloat<T> {
+impl<T: RealFloat> Neg for OrderedFloat<T> {
     type Output = Self;
 
     fn neg(self) -> Self {
@@ -197,11 +258,12 @@ impl<T: Float> Neg for OrderedFloat<T> {
 /// A wrapper around Floats providing an implementation of Ord and Hash.
 ///
 /// A NaN value cannot be stored in this type.
-#[derive(PartialOrd, PartialEq, Debug, Default, Clone, Copy)]
+#[derive(PartialOrd, PartialEq, Debug, Default, Clone, Copy, Alga)]
+#[alga_traits(Group(Additive))]
 #[repr(transparent)]
-pub struct NotNan<T: Float>(T);
+pub struct NotNan<T: RealFloat>(T);
 
-impl<T: Float> NotNan<T> {
+impl<T: RealFloat> NotNan<T> {
     /// Create a NotNan value.
     ///
     /// Returns Err if val is NaN
@@ -226,13 +288,13 @@ impl<T: Float> NotNan<T> {
     }
 }
 
-impl<T: Float> AsRef<T> for NotNan<T> {
+impl<T: RealFloat> AsRef<T> for NotNan<T> {
     fn as_ref(&self) -> &T {
         &self.0
     }
 }
 
-impl<T: Float> Ord for NotNan<T> {
+impl<T: RealFloat> Ord for NotNan<T> {
     fn cmp(&self, other: &NotNan<T>) -> Ordering {
         match self.partial_cmp(&other) {
             Some(ord) => ord,
@@ -241,15 +303,15 @@ impl<T: Float> Ord for NotNan<T> {
     }
 }
 
-impl<T: Float> Hash for NotNan<T> {
+impl<T: RealFloat> Hash for NotNan<T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         hash_float(self.as_ref(), state)
     }
 }
 
-impl<T: Float + fmt::Display> fmt::Display for NotNan<T> {
+impl<T: RealFloat + fmt::Display> fmt::Display for NotNan<T> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.as_ref().fmt(f)
+        core::fmt::Display::fmt(&self.as_ref(), f)
     }
 }
 
@@ -268,13 +330,13 @@ impl From<NotNan<f64>> for f64 {
 /// Creates a NotNan value from a Float.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> From<T> for NotNan<T> {
+impl<T: RealFloat> From<T> for NotNan<T> {
     fn from(v: T) -> Self {
         NotNan::new(v).expect("Tried to create a NotNan from a NaN")
     }
 }
 
-impl<T: Float> Deref for NotNan<T> {
+impl<T: RealFloat> Deref for NotNan<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -282,12 +344,12 @@ impl<T: Float> Deref for NotNan<T> {
     }
 }
 
-impl<T: Float + PartialEq> Eq for NotNan<T> {}
+impl<T: RealFloat + PartialEq> Eq for NotNan<T> {}
 
 /// Adds two NotNans.
 ///
 /// Panics if the computation results in NaN
-impl<T: Float> Add for NotNan<T> {
+impl<T: RealFloat> Add for NotNan<T> {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
@@ -298,7 +360,7 @@ impl<T: Float> Add for NotNan<T> {
 /// Adds a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> Add<T> for NotNan<T> {
+impl<T: RealFloat> Add<T> for NotNan<T> {
     type Output = Self;
 
     fn add(self, other: T) -> Self {
@@ -306,7 +368,7 @@ impl<T: Float> Add<T> for NotNan<T> {
     }
 }
 
-impl<T: Float + AddAssign> AddAssign for NotNan<T> {
+impl<T: RealFloat + AddAssign> AddAssign for NotNan<T> {
     fn add_assign(&mut self, other: Self) {
         *self += other.0;
     }
@@ -315,14 +377,14 @@ impl<T: Float + AddAssign> AddAssign for NotNan<T> {
 /// Adds a float directly.
 ///
 /// Panics if the provided value is NaN.
-impl<T: Float + AddAssign> AddAssign<T> for NotNan<T> {
+impl<T: RealFloat + AddAssign> AddAssign<T> for NotNan<T> {
     fn add_assign(&mut self, other: T) {
         self.0 += other;
         assert!(!self.0.is_nan(), "Addition resulted in NaN");
     }
 }
 
-impl<T: Float> Sub for NotNan<T> {
+impl<T: RealFloat> Sub for NotNan<T> {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
@@ -333,7 +395,7 @@ impl<T: Float> Sub for NotNan<T> {
 /// Subtracts a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> Sub<T> for NotNan<T> {
+impl<T: RealFloat> Sub<T> for NotNan<T> {
     type Output = Self;
 
     fn sub(self, other: T) -> Self {
@@ -341,7 +403,7 @@ impl<T: Float> Sub<T> for NotNan<T> {
     }
 }
 
-impl<T: Float + SubAssign> SubAssign for NotNan<T> {
+impl<T: RealFloat + SubAssign> SubAssign for NotNan<T> {
     fn sub_assign(&mut self, other: Self) {
         *self -= other.0
     }
@@ -350,14 +412,14 @@ impl<T: Float + SubAssign> SubAssign for NotNan<T> {
 /// Subtracts a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float + SubAssign> SubAssign<T> for NotNan<T> {
+impl<T: RealFloat + SubAssign> SubAssign<T> for NotNan<T> {
     fn sub_assign(&mut self, other: T) {
         self.0 -= other;
         assert!(!self.0.is_nan(), "Subtraction resulted in NaN");
     }
 }
 
-impl<T: Float> Mul for NotNan<T> {
+impl<T: RealFloat> Mul for NotNan<T> {
     type Output = Self;
 
     fn mul(self, other: Self) -> Self {
@@ -368,7 +430,7 @@ impl<T: Float> Mul for NotNan<T> {
 /// Multiplies a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> Mul<T> for NotNan<T> {
+impl<T: RealFloat> Mul<T> for NotNan<T> {
     type Output = Self;
 
     fn mul(self, other: T) -> Self {
@@ -376,7 +438,7 @@ impl<T: Float> Mul<T> for NotNan<T> {
     }
 }
 
-impl<T: Float + MulAssign> MulAssign for NotNan<T> {
+impl<T: RealFloat + MulAssign> MulAssign for NotNan<T> {
     fn mul_assign(&mut self, other: Self) {
         *self *= other.0
     }
@@ -385,14 +447,14 @@ impl<T: Float + MulAssign> MulAssign for NotNan<T> {
 /// Multiplies a float directly.
 ///
 /// Panics if the provided value is NaN.
-impl<T: Float + MulAssign> MulAssign<T> for NotNan<T> {
+impl<T: RealFloat + MulAssign> MulAssign<T> for NotNan<T> {
     fn mul_assign(&mut self, other: T) {
         self.0 *= other;
         assert!(!self.0.is_nan(), "Multiplication resulted in NaN");
     }
 }
 
-impl<T: Float> Div for NotNan<T> {
+impl<T: RealFloat> Div for NotNan<T> {
     type Output = Self;
 
     fn div(self, other: Self) -> Self {
@@ -403,7 +465,7 @@ impl<T: Float> Div for NotNan<T> {
 /// Divides a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> Div<T> for NotNan<T> {
+impl<T: RealFloat> Div<T> for NotNan<T> {
     type Output = Self;
 
     fn div(self, other: T) -> Self {
@@ -411,7 +473,7 @@ impl<T: Float> Div<T> for NotNan<T> {
     }
 }
 
-impl<T: Float + DivAssign> DivAssign for NotNan<T> {
+impl<T: RealFloat + DivAssign> DivAssign for NotNan<T> {
     fn div_assign(&mut self, other: Self) {
         *self /= other.0;
     }
@@ -420,14 +482,14 @@ impl<T: Float + DivAssign> DivAssign for NotNan<T> {
 /// Divides a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float + DivAssign> DivAssign<T> for NotNan<T> {
+impl<T: RealFloat + DivAssign> DivAssign<T> for NotNan<T> {
     fn div_assign(&mut self, other: T) {
         self.0 /= other;
         assert!(!self.0.is_nan(), "Division resulted in NaN");
     }
 }
 
-impl<T: Float> Rem for NotNan<T> {
+impl<T: RealFloat> Rem for NotNan<T> {
     type Output = Self;
 
     fn rem(self, other: Self) -> Self {
@@ -438,7 +500,7 @@ impl<T: Float> Rem for NotNan<T> {
 /// Calculates `%` with a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float> Rem<T> for NotNan<T> {
+impl<T: RealFloat> Rem<T> for NotNan<T> {
     type Output = Self;
 
     fn rem(self, other: T) -> Self {
@@ -446,7 +508,7 @@ impl<T: Float> Rem<T> for NotNan<T> {
     }
 }
 
-impl<T: Float + RemAssign> RemAssign for NotNan<T> {
+impl<T: RealFloat + RemAssign> RemAssign for NotNan<T> {
     fn rem_assign(&mut self, other: Self) {
         *self %= other.0
     }
@@ -455,14 +517,14 @@ impl<T: Float + RemAssign> RemAssign for NotNan<T> {
 /// Calculates `%=` with a float directly.
 ///
 /// Panics if the provided value is NaN or the computation results in NaN
-impl<T: Float + RemAssign> RemAssign<T> for NotNan<T> {
+impl<T: RealFloat + RemAssign> RemAssign<T> for NotNan<T> {
     fn rem_assign(&mut self, other: T) {
         self.0 %= other;
         assert!(!self.0.is_nan(), "Rem resulted in NaN");
     }
 }
 
-impl<T: Float> Neg for NotNan<T> {
+impl<T: RealFloat> Neg for NotNan<T> {
     type Output = Self;
 
     fn neg(self) -> Self {
@@ -495,12 +557,12 @@ impl Into<std::io::Error> for FloatIsNan {
 }
 
 #[inline]
-fn hash_float<F: Float, H: Hasher>(f: &F, state: &mut H) {
+fn hash_float<F: RealFloat, H: Hasher>(f: &F, state: &mut H) {
     raw_double_bits(f).hash(state);
 }
 
 #[inline]
-fn raw_double_bits<F: Float>(f: &F) -> u64 {
+fn raw_double_bits<F: RealFloat>(f: &F) -> u64 {
     if f.is_nan() {
         return CANONICAL_NAN_BITS;
     }
@@ -515,27 +577,27 @@ fn raw_double_bits<F: Float>(f: &F) -> u64 {
     (man & MAN_MASK) | ((exp_u64 << 52) & EXP_MASK) | ((sign_u64 << 63) & SIGN_MASK)
 }
 
-impl<T: Float> Zero for NotNan<T> {
+impl<T: RealFloat> Zero for NotNan<T> {
     fn zero() -> Self { NotNan(T::zero()) }
 
     fn is_zero(&self) -> bool { self.0.is_zero() }
 }
 
-impl<T: Float> One for NotNan<T> {
+impl<T: RealFloat> One for NotNan<T> {
     fn one() -> Self { NotNan(T::one()) }
 }
 
-impl<T: Float> Bounded for NotNan<T> {
+impl<T: RealFloat> Bounded for NotNan<T> {
     fn min_value() -> Self {
-        NotNan(T::min_value())
+        NotNan(num_traits::Float::min_value())
     }
 
     fn max_value() -> Self {
-        NotNan(T::max_value())
+        NotNan(num_traits::Float::max_value())
     }
 }
 
-impl<T: Float + FromStr> FromStr for NotNan<T> {
+impl<T: RealFloat + FromStr> FromStr for NotNan<T> {
     type Err = ParseNotNanError<T::Err>;
 
     /// Convert a &str to `NotNan`. Returns an error if the string fails to parse,
@@ -555,7 +617,7 @@ impl<T: Float + FromStr> FromStr for NotNan<T> {
     }
 }
 
-impl<T: Float + FromPrimitive> FromPrimitive for NotNan<T> {
+impl<T: RealFloat + FromPrimitive> FromPrimitive for NotNan<T> {
     fn from_i64(n: i64) -> Option<Self> { T::from_i64(n).and_then(|n| NotNan::new(n).ok()) }
     fn from_u64(n: u64) -> Option<Self> { T::from_u64(n).and_then(|n| NotNan::new(n).ok()) }
 
@@ -571,7 +633,7 @@ impl<T: Float + FromPrimitive> FromPrimitive for NotNan<T> {
     fn from_f64(n: f64) -> Option<Self> { T::from_f64(n).and_then(|n| NotNan::new(n).ok()) }
 }
 
-impl<T: Float> ToPrimitive for NotNan<T> {
+impl<T: RealFloat> ToPrimitive for NotNan<T> {
     fn to_i64(&self) -> Option<i64> { self.0.to_i64() }
     fn to_u64(&self) -> Option<u64> { self.0.to_u64() }
 
@@ -612,7 +674,7 @@ impl<E: fmt::Debug> fmt::Display for ParseNotNanError<E> {
     }
 }
 
-impl<T: Float> Num for NotNan<T> {
+impl<T: RealFloat> Num for NotNan<T> {
     type FromStrRadixErr = ParseNotNanError<T::FromStrRadixErr>;
 
     fn from_str_radix(src: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
@@ -622,23 +684,55 @@ impl<T: Float> Num for NotNan<T> {
     }
 }
 
-impl<T: Float + Signed> Signed for NotNan<T> {
-    fn abs(&self) -> Self { NotNan(self.0.abs()) }
+impl<T: RealFloat + Signed> Signed for NotNan<T> {
+    fn abs(&self) -> Self { NotNan(num_traits::Float::abs(self.0)) }
 
     fn abs_sub(&self, other: &Self) -> Self {
         NotNan::new(Signed::abs_sub(&self.0, &other.0)).expect("Subtraction resulted in NaN")
     }
 
-    fn signum(&self) -> Self { NotNan(self.0.signum()) }
+    fn signum(&self) -> Self { NotNan(num_traits::Float::signum(self.0)) }
     fn is_positive(&self) -> bool { self.0.is_positive() }
     fn is_negative(&self) -> bool { self.0.is_negative() }
 }
 
-impl<T: Float> NumCast for NotNan<T> {
+impl<T: RealFloat> NumCast for NotNan<T> {
     fn from<F: ToPrimitive>(n: F) -> Option<Self> {
         T::from(n).and_then(|n| NotNan::new(n).ok())
     }
 }
+
+impl<T: RealFloat + AbstractMagma<Additive>> AbstractMagma<Additive> for NotNan<T> {
+    fn operate(&self, right: &Self) -> Self {
+        NotNan(AbstractMagma::<Additive>::operate(&self.0, &right.0))
+    }
+}
+
+impl<T: RealFloat +  TwoSidedInverse<Additive>> TwoSidedInverse<Additive> for NotNan<T> {
+    fn two_sided_inverse(&self) -> Self {
+        NotNan(TwoSidedInverse::<Additive>::two_sided_inverse(&self.0))
+    }
+}
+
+impl<T: RealFloat +  Identity<Additive>> Identity<Additive> for NotNan<T> {
+    fn identity() -> Self {
+        NotNan(Identity::<Additive>::identity())
+    }
+}
+
+impl<T: RealFloat +  AbstractMagma<Multiplicative>> AbstractMagma<Multiplicative> for NotNan<T> {
+    fn operate(&self, right: &Self) -> Self {
+        NotNan(AbstractMagma::<Multiplicative>::operate(&self.0, &right.0))
+    }
+}
+
+impl<T: RealFloat +  Identity<Multiplicative>> Identity<Multiplicative> for NotNan<T> {
+    fn identity() -> Self {
+        NotNan(Identity::<Multiplicative>::identity())
+    }
+}
+
+// alga::impl_ring!(<Additive, Multiplicative> for NotNan<T> where T: AbstractRing);
 
 #[cfg(feature = "serde")]
 mod impl_serde {
@@ -657,25 +751,25 @@ mod impl_serde {
     #[cfg(test)]
     use self::serde_test::{Token, assert_tokens, assert_de_tokens_error};
 
-    impl<T: Float + Serialize> Serialize for OrderedFloat<T> {
+    impl<T: RealFloat + Serialize> Serialize for OrderedFloat<T> {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             self.0.serialize(s)
         }
     }
 
-    impl<'de, T: Float + Deserialize<'de>> Deserialize<'de> for OrderedFloat<T> {
+    impl<'de, T: RealFloat + Deserialize<'de>> Deserialize<'de> for OrderedFloat<T> {
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
             T::deserialize(d).map(OrderedFloat)
         }
     }
 
-    impl<T: Float + Serialize> Serialize for NotNan<T> {
+    impl<T: RealFloat + Serialize> Serialize for NotNan<T> {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             self.0.serialize(s)
         }
     }
 
-    impl<'de, T: Float + Deserialize<'de>> Deserialize<'de> for NotNan<T> {
+    impl<'de, T: RealFloat + Deserialize<'de>> Deserialize<'de> for NotNan<T> {
         fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
             let float = T::deserialize(d)?;
             NotNan::new(float).map_err(|_| {
