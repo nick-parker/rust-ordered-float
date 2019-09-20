@@ -259,7 +259,7 @@ impl<T: RealFloat> Neg for OrderedFloat<T> {
 ///
 /// A NaN value cannot be stored in this type.
 #[derive(PartialOrd, PartialEq, Debug, Default, Clone, Copy, Alga)]
-#[alga_traits(Group(Additive))]
+#[alga_traits(Ring(Additive, Multiplicative))]
 #[repr(transparent)]
 pub struct NotNan<T: RealFloat>(T);
 
@@ -711,6 +711,12 @@ impl<T: RealFloat + AbstractMagma<Additive>> AbstractMagma<Additive> for NotNan<
 impl<T: RealFloat +  TwoSidedInverse<Additive>> TwoSidedInverse<Additive> for NotNan<T> {
     fn two_sided_inverse(&self) -> Self {
         NotNan(TwoSidedInverse::<Additive>::two_sided_inverse(&self.0))
+    }
+}
+
+impl<T: RealFloat +  TwoSidedInverse<Multiplicative>> TwoSidedInverse<Multiplicative> for NotNan<T> {
+    fn two_sided_inverse(&self) -> Self {
+        NotNan(TwoSidedInverse::<Multiplicative>::two_sided_inverse(&self.0))
     }
 }
 
